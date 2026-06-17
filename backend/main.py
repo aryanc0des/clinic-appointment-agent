@@ -29,7 +29,32 @@ def registerUser(userData: Register):
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
         
-
+@app.post("/login-user")
+def loginUser(userData: Login):
+    
+    email = supabase.table("patients").select("email").eq("email", userData.email).execute()
+    
+    if not email.data:
+        raise HTTPException(status_code=401, detail="Invalid Credentials")
+    
+    hashed_password = supabase.table("patients").select("hashed_password").eq("email", userData.email).execute()
+    verification = verify_password(userData.password, hashed_password.data[0]["hashed_password"])
+    
+    if verification == False:
+        raise HTTPException(status_code=401, detail="Invalid Credentials")
+    
+    try:
+        user_id = supabase.table("patients").select("id").eq("email", userData.email).execute()
+        print(user_id)
+        jwt_token = create_token(user_id.data[0]["id"])
+        return {
+            "message": "User logged in",
+            "access_token": jwt_token,
+            "token_type": "bearer"
+            }
+    
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))
         
 @app.post("/book-appointment")
 def bookAppointmentManual(appointment: BookAppointment):
