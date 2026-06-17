@@ -3,6 +3,7 @@ from passlib.context import CryptContext
 import os
 from dotenv import load_dotenv
 from datetime import *
+from fastapi import Header, HTTPException
 
 load_dotenv()
 
@@ -18,10 +19,29 @@ def verify_password(password: str, hashed_password):
 
 def create_token(user_id):
     return jwt.encode(
-        {"user_id": user_id, "exp": datetime.utcnow() + timedelta(minutes=30)},
+        {"user_id": user_id, "exp": datetime.utcnow() + timedelta(minutes=30), "type": "access"},
+        jwt_secret_key,
+        algorithm="HS256"
+    )
+    
+def create_refresh_token(user_id):
+    return jwt.encode(
+        {"user_id": user_id, "exp": datetime.utcnow() + timedelta(days=7), "type": "refresh"},
         jwt_secret_key,
         algorithm="HS256"
     )
     
 def verify_token(token):
     return jwt.decode(token, jwt_secret_key, algorithms=["HS256"])
+
+def get_current_user(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.split(" ")[1]
+    
+    try:
+        return verify_token(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    

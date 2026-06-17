@@ -13,3 +13,13 @@ def calcEndTime(serviceID, startTime):
     start_dt = datetime.combine(datetime.today(), startTime)
     end_dt = start_dt + timedelta(minutes=duration.data[0]["duration_minutes"])
     return end_dt.time()
+
+def is_slot_available(serviceID, startTime, date):
+    endTime = str(calcEndTime(serviceID, str(startTime)))
+    
+    slot = supabase.table("appointments").select("id").eq("appointment_date", date).lt("start_time", endTime).gt("end_time", str(startTime)).neq("status", "cancelled").execute()
+    
+    if not slot.data:
+        return True
+    else:
+        return False

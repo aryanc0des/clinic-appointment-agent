@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends
 from models import *
 from db import *
 from services.appointments import *
@@ -6,6 +6,19 @@ from services.auth import *
 
 app = FastAPI()
 
+@app.post("/refresh")
+def refreshToken(tokenData: RefreshToken):
+    try:
+        decode = verify_token(tokenData.refresh_token)
+        userID = decode["user_id"]
+        
+        if decode.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        
+        return create_token(userID)
+    
+    except Exception as error:
+        raise HTTPException(status_code=401, detail=str(error))
 
 @app.post("/register-user")
 def registerUser(userData: Register):
@@ -46,10 +59,13 @@ def loginUser(userData: Login):
     try:
         user_id = supabase.table("patients").select("id").eq("email", userData.email).execute()
         print(user_id)
-        jwt_token = create_token(user_id.data[0]["id"])
+        access_token = create_token(user_id.data[0]["id"])
+        refresh_token = create_refresh_token(user_id.data[0]["id"])
+        
         return {
             "message": "User logged in",
-            "access_token": jwt_token,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer"
             }
     
@@ -57,17 +73,23 @@ def loginUser(userData: Login):
         raise HTTPException(status_code=500, detail=str(error))
         
 @app.post("/book-appointment")
-def bookAppointmentManual(appointment: BookAppointment):
-    try:
-        endTime = calcEndTime(appointment.service_id, appointment.start_time)
-        data = appointment.model_dump(mode="json")
-        data["end_time"] = str(endTime)
-        res = supabase.table("appointments").insert(data).execute()
+def bookAppointmentManual(appointment: BookAppointment, current_user = Depends(get_current_user)):
+    if is_slot_available:
+        try:
+            endTime = calcEndTime(appointment.service_id, appointment.start_time)
+            patientID = current_user["user_id"]
+            data = appointment.model_dump(mode="json")
+            data["end_time"] = str(endTime)
+            data["patient_id"] = str(patientID)
+            res = supabase.table("appointments").insert(data).execute()
+            
+            return {
+                "message": "Booking Successfull",
+                "Appointment": res
+            }
+            
+        except Exception as error:
+            raise HTTPException(status_code=500, detail=str(error)) 
         
-        return {
-            "message": "Booking Successfull",
-            "Appointment": res
-        }
-        
-    except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error)) 
+    else:
+        raise HTTPException(status_code=409, detail="Conflict")
