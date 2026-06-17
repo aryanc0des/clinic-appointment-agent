@@ -1,6 +1,6 @@
 from db import *
 from fastapi import HTTPException
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 
 #calculating end time of a session#
 
@@ -15,7 +15,7 @@ def calcEndTime(serviceID, startTime):
     return end_dt.time()
 
 def is_slot_available(serviceID, startTime, date):
-    endTime = str(calcEndTime(serviceID, str(startTime)))
+    endTime = str(calcEndTime(serviceID, time.fromisoformat(startTime)))
     
     slot = supabase.table("appointments").select("id").eq("appointment_date", date).lt("start_time", endTime).gt("end_time", str(startTime)).neq("status", "cancelled").execute()
     

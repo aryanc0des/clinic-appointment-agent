@@ -74,11 +74,14 @@ def loginUser(userData: Login):
         
 @app.post("/book-appointment")
 def bookAppointmentManual(appointment: BookAppointment, current_user = Depends(get_current_user)):
-    if is_slot_available:
+    data = appointment.model_dump(mode="json")
+    serviceID = data["service_id"]
+    startTime = data["start_time"]
+    date = data["appointment_date"]
+    if is_slot_available(serviceID, startTime, date):
         try:
             endTime = calcEndTime(appointment.service_id, appointment.start_time)
             patientID = current_user["user_id"]
-            data = appointment.model_dump(mode="json")
             data["end_time"] = str(endTime)
             data["patient_id"] = str(patientID)
             res = supabase.table("appointments").insert(data).execute()
@@ -92,4 +95,19 @@ def bookAppointmentManual(appointment: BookAppointment, current_user = Depends(g
             raise HTTPException(status_code=500, detail=str(error)) 
         
     else:
-        raise HTTPException(status_code=409, detail="Conflict")
+        raise HTTPException(status_code=409, detail="This time slot is already booked. Please choose a different time.")
+    
+    
+@app.get("/active_appointments")
+def activeAppointments(current_user = Depends(get_current_user)):
+    try:
+        patientID = current_user["user_id"]
+        res = supabase.table("appointments").select("*").eq("patient_id", patientID).eq("status", "scheduled").execute()
+        
+        return {
+            "message": "Active Appoinments",
+            "Appointmens": res
+        }
+        
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error)) 
