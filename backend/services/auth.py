@@ -2,6 +2,7 @@ from jose import jwt
 from passlib.context import CryptContext
 import os
 from dotenv import load_dotenv
+from datetime import *
 
 load_dotenv()
 
@@ -17,7 +18,7 @@ def verify_password(password: str, hashed_password):
 
 def create_token(user_id):
     return jwt.encode(
-        {"user_id": user_id},
+        {"user_id": user_id, "exp": datetime.utcnow() + timedelta(minutes=30)},
         jwt_secret_key,
         algorithm="HS256"
     )
