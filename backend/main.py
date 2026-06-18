@@ -106,8 +106,40 @@ def activeAppointments(current_user = Depends(get_current_user)):
         
         return {
             "message": "Active Appoinments",
-            "Appointmens": res
+            "Appointments": res
         }
         
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error)) 
+    
+@app.get("/past_appointments")
+def pastAppointments(current_user = Depends(get_current_user)):
+    try:
+        patientID = current_user["user_id"]
+        res = supabase.table("appointments").select("*").eq("patient_id", patientID).in_("status", ["completed", "cancelled", "missed"]).execute()
+        
+        return {
+            "message": "Past Appoinments",
+            "Appointments": res
+        }
+        
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error)) 
+    
+@app.patch("/cancel-appointment/{appointment_id}")
+def cancelAppointment(appointment_id: str, current_user = Depends(get_current_user)):
+    
+    try:
+        patientID = current_user["user_id"]
+        patient = supabase.table("appointments").update({"status": "cancelled"}).eq("patient_id", patientID).eq("status", "scheduled").eq("id", appointment_id).execute()
+        
+        if not patient.data:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+        
+        return{
+            "message": "Appointment Cancelled",
+            "Appointment": patient.data[0]
+        }
+        
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))
