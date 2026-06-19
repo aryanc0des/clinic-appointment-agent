@@ -3,6 +3,7 @@ from models import *
 from db import *
 from services.appointments import *
 from services.auth import *
+from services.email import *
 
 app = FastAPI()
 
@@ -17,6 +18,8 @@ def refreshToken(tokenData: RefreshToken):
         
         return create_token(userID)
     
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(status_code=401, detail=str(error))
 
@@ -86,6 +89,11 @@ def bookAppointmentManual(appointment: BookAppointment, current_user = Depends(g
             data["patient_id"] = str(patientID)
             res = supabase.table("appointments").insert(data).execute()
             
+            patientTable = supabase.table("patients").select("email, full_name").eq("id", patientID).execute()
+            serviceTable = supabase.table("services").select("*").eq("id", serviceID).execute()
+            
+            send_booking_confirmation(patientTable.data[0]["email"], patientTable.data[0]["full_name"], date, startTime, serviceTable.data[0]["name"])
+            
             return {
                 "message": "Booking Successfull",
                 "Appointment": res
@@ -141,5 +149,43 @@ def cancelAppointment(appointment_id: str, current_user = Depends(get_current_us
             "Appointment": patient.data[0]
         }
         
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
+    
+@app.patch("/appointments/{id}/reschedule")
+def rescheduleAppointment(id: str, rescheduleData: RescheduleAppointment, current_user = Depends(get_current_user)):
+    appointmentData = supabase.table("appointments").select("*").eq("id", id).execute()
+        
+    if not appointmentData.data:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    serviceID = appointmentData.data[0]["service_id"]
+    patientID = current_user["user_id"]
+    # startTime= appointmentData.data[0]["start_time"]
+    # appointmentDate = appointmentData.data[0]["appointment_date"]
+    
+    if is_slot_available(serviceID, str(rescheduleData.appointment_time), rescheduleData.appointment_date):
+        try:
+            reschedule_data = rescheduleData.model_dump(mode="json")
+            reschedule_data["start_time"] = reschedule_data.pop("appointment_time")
+            endTime = calcEndTime(serviceID, rescheduleData.appointment_time)
+            reschedule_data["end_time"] = str(endTime)
+            res = supabase.table("appointments").update(reschedule_data).eq("id", id).eq("patient_id", patientID).execute()
+            
+            if not res.data:
+                raise HTTPException(status_code=403, detail="Not authorized")
+            else:
+                return {
+                    "message": "Appointment Rescheduled",
+                    "Appointment": res
+                }
+            
+        except HTTPException:
+            raise
+        except Exception as error:
+            raise HTTPException(status_code=500, detail=str(error))  
+        
+    else:
+        raise HTTPException(status_code=409, detail="This time slot is already booked. Please choose a different time.")

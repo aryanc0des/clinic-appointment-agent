@@ -19,3 +19,7 @@ class Login(BaseModel):
     
 class RefreshToken(BaseModel):
     refresh_token: str
+    
+class RescheduleAppointment(BaseModel):
+    appointment_date: date
+    appointment_time: time 
