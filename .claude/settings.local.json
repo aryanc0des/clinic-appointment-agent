@@ -21,7 +21,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://smilecare-clinic-appointment-agent.onrender.com/docs)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://smilecare-clinic-appointment-agent.onrender.com/openapi.json)",
       "Bash(curl -s -w \"\\\\n%{http_code}\\\\n\" https://smilecare-clinic-appointment-agent.onrender.com/services)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(git checkout *)"
     ]
   }
 }

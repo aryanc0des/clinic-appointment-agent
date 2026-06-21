@@ -17,7 +17,7 @@ def calcEndTime(serviceID, startTime):
 def is_slot_available(serviceID, startTime, date):
     endTime = str(calcEndTime(serviceID, time.fromisoformat(startTime)))
 
-    slot = supabase.table("appointments").select("id").eq("appointment_date", date).lt("start_time", endTime).gt("end_time", str(startTime)).neq("status", "cancelled").execute()
+    slot = supabase.table("appointments").select("id").eq("appointment_date", date).lt("start_time", endTime).gt("end_time", str(startTime)).eq("status", "scheduled").execute()
 
     if not slot.data:
         return True
