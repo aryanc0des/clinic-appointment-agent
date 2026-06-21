@@ -59,7 +59,7 @@ export function VoiceAgent() {
         <div className="text-sm text-foreground">
           <p className="font-medium mb-1">How it works</p>
           <p className="text-muted-foreground leading-relaxed">
-            Click the microphone below and speak naturally. Just say your{" "}
+            Click the chat bubble in the bottom-right corner and speak naturally. Just say your{" "}
             <strong className="text-foreground">name</strong>, the{" "}
             <strong className="text-foreground">date</strong> and{" "}
             <strong className="text-foreground">time</strong> you&apos;d like, and the{" "}
@@ -73,8 +73,8 @@ export function VoiceAgent() {
         </div>
       </div>
 
-      {/* Widget area */}
-      <div className="flex flex-col items-center gap-4 min-h-[200px] justify-center">
+      {/* Widget status — the actual widget renders as a floating bubble, not inline here */}
+      <div className="flex flex-col items-center gap-3 text-center py-6">
         {scriptState === "loading" && (
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -94,8 +94,23 @@ export function VoiceAgent() {
           </div>
         )}
 
-        {scriptState === "ready" &&
-          React.createElement("elevenlabs-convai", { "agent-id": AGENT_ID })}
+        {scriptState === "ready" && (
+          <>
+            <Mic2 className="h-5 w-5 text-primary" />
+            <p className="text-sm text-muted-foreground">
+              Ready — use the chat bubble in the bottom-right corner to start.
+            </p>
+            {React.createElement("elevenlabs-convai", {
+              "agent-id": AGENT_ID,
+              variant: "expanded",
+              "avatar-orb-color-1": "#2D6A5F",
+              "avatar-orb-color-2": "#C4622D",
+              "action-text": "Talk to SmileCare",
+              "start-call-text": "Start booking",
+              "end-call-text": "End call",
+            })}
+          </>
+        )}
       </div>
     </div>
   );
