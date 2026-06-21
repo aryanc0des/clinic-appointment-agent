@@ -51,7 +51,7 @@ export default function LoginPage() {
     <div className="w-full max-w-md">
       {/* Hero text above card */}
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold text-foreground">Welcome back</h1>
+        <h1 className="font-serif text-[34px] font-medium text-foreground tracking-tight">Welcome back.</h1>
         <p className="mt-2 text-muted-foreground">Sign in to manage your appointments</p>
       </div>
 

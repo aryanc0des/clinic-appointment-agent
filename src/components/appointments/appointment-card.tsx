@@ -1,12 +1,10 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Calendar, Clock, Stethoscope, User } from "lucide-react";
-import { cn, formatTime, getStatusColor } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { formatTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { StatusPill } from "@/components/ui/status-pill";
 import type { Appointment } from "@/lib/types";
-import type { BadgeProps } from "@/components/ui/badge";
 
 interface AppointmentCardProps {
   appointment: Appointment;
@@ -15,109 +13,124 @@ interface AppointmentCardProps {
   compact?: boolean;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  upcoming: "Upcoming",
-  confirmed: "Confirmed",
-  pending: "Pending",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
 export function AppointmentCard({
   appointment,
   onCancel,
   onReschedule,
   compact = false,
 }: AppointmentCardProps) {
-  const statusColor = getStatusColor(appointment.status) as BadgeProps["variant"];
-  const statusLabel = STATUS_LABELS[appointment.status] ?? appointment.status;
-  const isPast = ["completed", "cancelled"].includes(appointment.status);
+  const isPast = ["completed", "cancelled", "missed"].includes(appointment.status);
 
-  let formattedDate = appointment.appointment_date;
+  let month = "";
+  let day = "";
+  let weekday = "";
   try {
-    formattedDate = format(parseISO(appointment.appointment_date), "EEEE, MMMM d, yyyy");
+    const d = parseISO(appointment.appointment_date);
+    month = format(d, "MMM");
+    day = format(d, "d");
+    weekday = format(d, "EEE");
   } catch {
-    // keep raw string
+    // keep blank
+  }
+
+  const typeName = appointment.appointment_type?.name ?? "Appointment";
+  const duration = appointment.appointment_type?.duration_minutes;
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-4 py-3.5 px-1">
+        <div className="flex flex-col items-center min-w-[28px] shrink-0">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+            {month}
+          </span>
+          <span className="font-serif text-[22px] leading-tight text-muted-foreground/70">
+            {day}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm" style={{ color: "rgba(22,48,43,0.72)" }}>
+            {typeName}
+          </p>
+          <p className="text-xs text-muted-foreground/70 mt-0.5">
+            {appointment.doctor_name ? `${appointment.doctor_name} · ` : ""}
+            {formatTime(appointment.appointment_time)}
+            {duration ? ` · ${duration} min` : ""}
+          </p>
+        </div>
+        <StatusPill status={appointment.status} className="shrink-0" />
+      </div>
+    );
   }
 
   return (
     <div
-      className={cn(
-        "rounded-lg border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-md",
-        isPast && "opacity-70"
-      )}
+      className={`bg-card rounded-[10px] overflow-hidden border border-border shadow-sm ${
+        isPast ? "opacity-70" : ""
+      }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          {/* Type + status */}
-          <div className="flex items-center gap-2 flex-wrap mb-2">
-            <span className="text-base font-semibold text-foreground truncate">
-              {appointment.appointment_type?.name ?? "Appointment"}
-            </span>
-            <Badge variant={statusColor}>{statusLabel}</Badge>
-          </div>
-
-          {/* Date and time */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5 shrink-0 text-primary" />
-              <span>{formattedDate}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-3.5 w-3.5 shrink-0 text-primary" />
-              <span>{formatTime(appointment.appointment_time)}</span>
-            </div>
-          </div>
-
-          {/* Doctor / patient name */}
-          {!compact && (
-            <div className="mt-3 flex flex-col gap-1">
-              {appointment.doctor_name && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Stethoscope className="h-3.5 w-3.5 shrink-0" />
-                  <span>{appointment.doctor_name}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <User className="h-3.5 w-3.5 shrink-0" />
-                <span>{appointment.full_name}</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Duration pill */}
-        {appointment.appointment_type?.duration_minutes && (
-          <span className="shrink-0 text-xs text-muted-foreground bg-muted rounded-full px-2.5 py-1 font-medium">
-            {appointment.appointment_type.duration_minutes} min
+      <div className="flex p-5">
+        <div className="flex flex-col items-center pr-5 border-r border-border min-w-[62px] shrink-0 pt-0.5">
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            {month}
           </span>
-        )}
-      </div>
-
-      {/* Actions for upcoming only */}
-      {!compact && !isPast && (onCancel || onReschedule) && (
-        <div className="flex gap-2 mt-4 pt-4 border-t border-border">
-          {onReschedule && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onReschedule(appointment)}
-            >
-              Reschedule
-            </Button>
-          )}
-          {onCancel && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive-subtle"
-              onClick={() => onCancel(appointment.id)}
-            >
-              Cancel
-            </Button>
-          )}
+          <span className="font-serif text-[44px] font-medium leading-none text-foreground my-0.5">
+            {day}
+          </span>
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            {weekday}
+          </span>
         </div>
-      )}
+
+        <div className="flex-1 pl-5 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-base font-medium text-foreground tracking-tight mb-1 truncate">
+              {typeName}
+            </p>
+            {appointment.doctor_name && (
+              <p className="text-sm text-muted-foreground mb-2.5">{appointment.doctor_name}</p>
+            )}
+            <div className="flex items-center gap-2 flex-wrap text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {formatTime(appointment.appointment_time)}
+              </span>
+              {duration && (
+                <>
+                  <span className="text-muted-foreground/40 text-xs">·</span>
+                  <span>{duration} min</span>
+                </>
+              )}
+              <span className="text-muted-foreground/40 text-xs">·</span>
+              <span>{appointment.full_name}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-3 shrink-0 ml-2">
+            <StatusPill status={appointment.status} />
+            {!isPast && (onCancel || onReschedule) && (
+              <div className="flex items-center gap-3">
+                {onReschedule && (
+                  <button
+                    onClick={() => onReschedule(appointment)}
+                    className="text-sm text-primary underline underline-offset-2 hover:opacity-80"
+                  >
+                    Reschedule
+                  </button>
+                )}
+                {onCancel && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive-subtle h-7 px-2"
+                    onClick={() => onCancel(appointment.id)}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

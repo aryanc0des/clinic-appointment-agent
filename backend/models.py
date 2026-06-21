@@ -22,4 +22,19 @@ class RefreshToken(BaseModel):
     
 class RescheduleAppointment(BaseModel):
     appointment_date: date
-    appointment_time: time 
+    appointment_time: time
+
+class UpdateAppointmentStatus(BaseModel):
+    status: str
+
+class ScheduleSession(BaseModel):
+    appointment_date: date
+    start_time: time
+
+class UpdateService(BaseModel):
+    price_rupees: Optional[int] = None
+    duration_minutes: Optional[int] = None
+
+class UpdateProfile(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None

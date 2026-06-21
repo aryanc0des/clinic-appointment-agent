@@ -60,7 +60,7 @@ export default function RegisterPage() {
   return (
     <div className="w-full max-w-md">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold text-foreground">Create your account</h1>
+        <h1 className="font-serif text-[34px] font-medium text-foreground tracking-tight">Create your account.</h1>
         <p className="mt-2 text-muted-foreground">Start managing your health appointments today</p>
       </div>
 

@@ -27,14 +27,32 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+function isInsidePopperContent(target: EventTarget | null) {
+  return target instanceof Element && target.closest("[data-radix-popper-content-wrapper]") !== null;
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      onPointerDownOutside={(e) => {
+        if (isInsidePopperContent(e.target)) {
+          e.preventDefault();
+          return;
+        }
+        onPointerDownOutside?.(e);
+      }}
+      onInteractOutside={(e) => {
+        if (isInsidePopperContent(e.target)) {
+          e.preventDefault();
+          return;
+        }
+        onInteractOutside?.(e);
+      }}
       className={cn(
         "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
         "w-full max-w-lg mx-4",

@@ -13,11 +13,14 @@ export async function loginApi(payload: LoginPayload): Promise<AuthTokens> {
     setTokens(MOCK_AUTH_TOKENS.access_token, MOCK_AUTH_TOKENS.refresh_token);
     return MOCK_AUTH_TOKENS;
   }
-  const data = await apiRequest<AuthTokens>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify(payload),
-    skipAuth: true,
-  });
+  const data = await apiRequest<{ access_token: string; refresh_token: string; token_type: string }>(
+    "/login-user",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      skipAuth: true,
+    }
+  );
   setTokens(data.access_token, data.refresh_token);
   return data;
 }
@@ -28,13 +31,13 @@ export async function registerApi(payload: RegisterPayload): Promise<AuthTokens>
     setTokens(MOCK_AUTH_TOKENS.access_token, MOCK_AUTH_TOKENS.refresh_token);
     return MOCK_AUTH_TOKENS;
   }
-  const data = await apiRequest<AuthTokens>("/auth/register", {
+  // Registration doesn't issue tokens — log in right after with the same credentials.
+  await apiRequest("/register-user", {
     method: "POST",
     body: JSON.stringify(payload),
     skipAuth: true,
   });
-  setTokens(data.access_token, data.refresh_token);
-  return data;
+  return loginApi({ email: payload.email, password: payload.password });
 }
 
 export async function getMeApi(): Promise<Patient> {
@@ -42,7 +45,7 @@ export async function getMeApi(): Promise<Patient> {
     await delay(300);
     return MOCK_PATIENT;
   }
-  return apiRequest<Patient>("/auth/me");
+  return apiRequest<Patient>("/me");
 }
 
 export async function updateProfileApi(
@@ -52,7 +55,7 @@ export async function updateProfileApi(
     await delay();
     return { ...MOCK_PATIENT, ...payload };
   }
-  return apiRequest<Patient>("/auth/me", {
+  return apiRequest<Patient>("/me", {
     method: "PATCH",
     body: JSON.stringify(payload),
   });

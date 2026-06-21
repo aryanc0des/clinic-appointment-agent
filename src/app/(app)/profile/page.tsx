@@ -59,7 +59,7 @@ export default function ProfilePage() {
   return (
     <div className="max-w-lg flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Profile</h1>
+        <h1 className="font-serif text-[28px] font-medium text-foreground tracking-tight">Profile</h1>
         <p className="text-muted-foreground mt-0.5">Manage your personal information</p>
       </div>
 

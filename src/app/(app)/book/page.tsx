@@ -19,7 +19,7 @@ function BookPageInner() {
     <div className="max-w-xl mx-auto flex flex-col gap-8">
       {/* Page heading */}
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Book an appointment</h1>
+        <h1 className="font-serif text-[28px] font-medium text-foreground tracking-tight">Book an appointment</h1>
         <p className="text-muted-foreground mt-1">Choose how you&apos;d like to book your visit</p>
       </div>
 

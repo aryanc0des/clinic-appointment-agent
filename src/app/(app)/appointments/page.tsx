@@ -78,17 +78,17 @@ export default function AppointmentsPage() {
   });
 
   const upcoming = appointments.filter(
-    (a) => !["completed", "cancelled"].includes(a.status)
+    (a) => !["completed", "cancelled", "missed"].includes(a.status)
   );
   const past = appointments.filter((a) =>
-    ["completed", "cancelled"].includes(a.status)
+    ["completed", "cancelled", "missed"].includes(a.status)
   );
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">My appointments</h1>
+          <h1 className="font-serif text-[28px] font-medium text-foreground tracking-tight">My appointments</h1>
           <p className="text-muted-foreground mt-0.5">
             {appointments.length} total appointment{appointments.length !== 1 ? "s" : ""}
           </p>
@@ -182,7 +182,7 @@ export default function AppointmentsPage() {
       </Dialog>
 
       {/* Reschedule dialog */}
-      <Dialog open={!!rescheduleTarget} onOpenChange={(o) => !o && setRescheduleTarget(null)}>
+      <Dialog modal={false} open={!!rescheduleTarget} onOpenChange={(o) => !o && setRescheduleTarget(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reschedule appointment</DialogTitle>

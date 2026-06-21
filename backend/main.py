@@ -1,22 +1,40 @@
+import os
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from models import *
 from db import *
 from services.appointments import *
 from services.auth import *
 from services.email import *
+from services.treatment_plans import *
 
 app = FastAPI()
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/refresh")
 def refreshToken(tokenData: RefreshToken):
     try:
         decode = verify_token(tokenData.refresh_token)
         userID = decode["user_id"]
-        
+        role = decode.get("role", "patient")
+
         if decode.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid token type")
-        
-        return create_token(userID)
+
+        return {"access_token": create_token(userID, role), "token_type": "bearer"}
     
     except HTTPException:
         raise
@@ -61,20 +79,97 @@ def loginUser(userData: Login):
     
     try:
         user_id = supabase.table("patients").select("id").eq("email", userData.email).execute()
-        print(user_id)
-        access_token = create_token(user_id.data[0]["id"])
-        refresh_token = create_refresh_token(user_id.data[0]["id"])
-        
+        access_token = create_token(user_id.data[0]["id"], "patient")
+        refresh_token = create_refresh_token(user_id.data[0]["id"], "patient")
+
         return {
             "message": "User logged in",
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer"
             }
-    
+
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
-        
+
+@app.post("/login-staff")
+def loginStaff(staffData: Login):
+
+    email = supabase.table("staff").select("email").eq("email", staffData.email).execute()
+
+    if not email.data:
+        raise HTTPException(status_code=401, detail="Invalid Credentials")
+
+    hashed_password = supabase.table("staff").select("hashed_password").eq("email", staffData.email).execute()
+    verification = verify_password(staffData.password, hashed_password.data[0]["hashed_password"])
+
+    if verification == False:
+        raise HTTPException(status_code=401, detail="Invalid Credentials")
+
+    try:
+        staff_id = supabase.table("staff").select("id").eq("email", staffData.email).execute()
+        access_token = create_token(staff_id.data[0]["id"], "staff")
+        refresh_token = create_refresh_token(staff_id.data[0]["id"], "staff")
+
+        return {
+            "message": "Staff logged in",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer"
+            }
+
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))
+
+@app.get("/staff/me")
+def getStaffMe(current_user = Depends(get_current_staff)):
+    res = supabase.table("staff").select("id, full_name, email").eq("id", current_user["user_id"]).execute()
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    s = res.data[0]
+    return {"id": s["id"], "full_name": s["full_name"], "email": s["email"], "role": "staff"}
+
+@app.get("/me")
+def getMe(current_user = Depends(get_current_user)):
+    res = supabase.table("patients").select("id, full_name, email, phone, created_at").eq("id", current_user["user_id"]).execute()
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    return res.data[0]
+
+@app.patch("/me")
+def updateMe(updates: UpdateProfile, current_user = Depends(get_current_user)):
+    update_data = updates.model_dump(exclude_none=True)
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    res = supabase.table("patients").update(update_data).eq("id", current_user["user_id"]).execute()
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    p = res.data[0]
+    return {
+        "id": p["id"],
+        "full_name": p["full_name"],
+        "email": p["email"],
+        "phone": p.get("phone"),
+        "created_at": p["created_at"],
+    }
+
+@app.get("/appointments")
+def listMyAppointments(current_user = Depends(get_current_user)):
+    patientID = current_user["user_id"]
+    appointments = supabase.table("appointments").select("*").eq("patient_id", patientID).execute().data
+    services = supabase.table("services").select("id, name, duration_minutes").execute().data
+    service_map = {s["id"]: s for s in services}
+
+    return [shape_patient_appointment(a, service_map) for a in appointments]
+
 @app.post("/book-appointment")
 def bookAppointmentManual(appointment: BookAppointment, current_user = Depends(get_current_user)):
     data = appointment.model_dump(mode="json")
@@ -83,25 +178,40 @@ def bookAppointmentManual(appointment: BookAppointment, current_user = Depends(g
     date = data["appointment_date"]
     if is_slot_available(serviceID, startTime, date):
         try:
+            serviceTable = supabase.table("services").select("*").eq("id", serviceID).execute()
+            if not serviceTable.data:
+                raise HTTPException(status_code=400, detail="Service not found")
+            service = serviceTable.data[0]
+
             endTime = calcEndTime(appointment.service_id, appointment.start_time)
             patientID = current_user["user_id"]
             data["end_time"] = str(endTime)
             data["patient_id"] = str(patientID)
+
+            if service["is_multi_session"]:
+                plan = supabase.table("treatment_plans").insert({
+                    "patient_id": str(patientID),
+                    "service_id": serviceID,
+                    "total_sessions": service["session_count"],
+                    "current_session": 1,
+                    "status": "in_progress",
+                }).execute()
+                data["treatment_plan_id"] = plan.data[0]["id"]
+                data["session_number"] = 1
+
             res = supabase.table("appointments").insert(data).execute()
-            
+
             patientTable = supabase.table("patients").select("email, full_name").eq("id", patientID).execute()
-            serviceTable = supabase.table("services").select("*").eq("id", serviceID).execute()
-            
-            send_booking_confirmation(patientTable.data[0]["email"], patientTable.data[0]["full_name"], date, startTime, serviceTable.data[0]["name"])
-            
-            return {
-                "message": "Booking Successfull",
-                "Appointment": res
-            }
-            
+
+            send_booking_confirmation(patientTable.data[0]["email"], patientTable.data[0]["full_name"], date, startTime, service["name"])
+
+            return shape_patient_appointment(res.data[0], {serviceID: service})
+
+        except HTTPException:
+            raise
         except Exception as error:
-            raise HTTPException(status_code=500, detail=str(error)) 
-        
+            raise HTTPException(status_code=500, detail=str(error))
+
     else:
         raise HTTPException(status_code=409, detail="This time slot is already booked. Please choose a different time.")
     
@@ -140,15 +250,17 @@ def cancelAppointment(appointment_id: str, current_user = Depends(get_current_us
     try:
         patientID = current_user["user_id"]
         patient = supabase.table("appointments").update({"status": "cancelled"}).eq("patient_id", patientID).eq("status", "scheduled").eq("id", appointment_id).execute()
-        
+
         if not patient.data:
             raise HTTPException(status_code=404, detail="Appointment not found")
-        
-        return{
-            "message": "Appointment Cancelled",
-            "Appointment": patient.data[0]
-        }
-        
+
+        row = patient.data[0]
+        service = supabase.table("services").select("id, name, duration_minutes").eq("id", row["service_id"]).execute()
+        service_map = {row["service_id"]: service.data[0]} if service.data else {}
+
+        return shape_patient_appointment(row, service_map)
+
+
     except HTTPException:
         raise
     except Exception as error:
@@ -162,30 +274,140 @@ def rescheduleAppointment(id: str, rescheduleData: RescheduleAppointment, curren
         raise HTTPException(status_code=404, detail="Appointment not found")
     
     serviceID = appointmentData.data[0]["service_id"]
-    patientID = current_user["user_id"]
-    # startTime= appointmentData.data[0]["start_time"]
-    # appointmentDate = appointmentData.data[0]["appointment_date"]
-    
+    is_staff = current_user.get("role") == "staff"
+
     if is_slot_available(serviceID, str(rescheduleData.appointment_time), rescheduleData.appointment_date):
         try:
             reschedule_data = rescheduleData.model_dump(mode="json")
             reschedule_data["start_time"] = reschedule_data.pop("appointment_time")
             endTime = calcEndTime(serviceID, rescheduleData.appointment_time)
             reschedule_data["end_time"] = str(endTime)
-            res = supabase.table("appointments").update(reschedule_data).eq("id", id).eq("patient_id", patientID).execute()
-            
+
+            query = supabase.table("appointments").update(reschedule_data).eq("id", id)
+            if not is_staff:
+                query = query.eq("patient_id", current_user["user_id"])
+            res = query.execute()
+
             if not res.data:
                 raise HTTPException(status_code=403, detail="Not authorized")
             else:
-                return {
-                    "message": "Appointment Rescheduled",
-                    "Appointment": res
-                }
-            
+                row = res.data[0]
+                service = supabase.table("services").select("id, name, duration_minutes").eq("id", serviceID).execute()
+                service_map = {serviceID: service.data[0]} if service.data else {}
+                if is_staff:
+                    return shape_staff_appointment(row, service_map)
+                return shape_patient_appointment(row, service_map)
+
         except HTTPException:
             raise
         except Exception as error:
-            raise HTTPException(status_code=500, detail=str(error))  
-        
+            raise HTTPException(status_code=500, detail=str(error))
+
     else:
         raise HTTPException(status_code=409, detail="This time slot is already booked. Please choose a different time.")
+
+@app.get("/services")
+def listServices(current_user = Depends(get_current_user)):
+    res = supabase.table("services").select("*").execute()
+    return [
+        {
+            "id": s["id"],
+            "name": s["name"],
+            "price": s["price_rupees"],
+            "duration_minutes": s["duration_minutes"],
+            "is_multi_session": s["is_multi_session"],
+            "session_count": s["session_count"],
+        }
+        for s in res.data
+    ]
+
+@app.patch("/staff/services/{service_id}")
+def updateService(service_id: str, updates: UpdateService, current_user = Depends(get_current_staff)):
+    update_data = updates.model_dump(exclude_none=True)
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    res = supabase.table("services").update(update_data).eq("id", service_id).execute()
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Service not found")
+
+    s = res.data[0]
+    return {
+        "id": s["id"],
+        "name": s["name"],
+        "price": s["price_rupees"],
+        "duration_minutes": s["duration_minutes"],
+        "is_multi_session": s["is_multi_session"],
+        "session_count": s["session_count"],
+    }
+
+@app.get("/staff/appointments")
+def listStaffAppointments(current_user = Depends(get_current_staff)):
+    appointments = supabase.table("appointments").select("*").execute().data
+    services = supabase.table("services").select("id, name").execute().data
+    service_map = {s["id"]: s for s in services}
+
+    return [shape_staff_appointment(a, service_map) for a in appointments]
+
+@app.patch("/staff/appointments/{appointment_id}/status")
+def updateStaffAppointmentStatus(appointment_id: str, statusData: UpdateAppointmentStatus, current_user = Depends(get_current_staff)):
+    allowed_statuses = {"scheduled", "completed", "cancelled", "missed"}
+
+    if statusData.status not in allowed_statuses:
+        raise HTTPException(status_code=400, detail=f"status must be one of {sorted(allowed_statuses)}")
+
+    res = supabase.table("appointments").update({"status": statusData.status}).eq("id", appointment_id).execute()
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    row = res.data[0]
+    service = supabase.table("services").select("id, name").eq("id", row["service_id"]).execute()
+    service_map = {row["service_id"]: service.data[0]} if service.data else {}
+
+    return shape_staff_appointment(row, service_map)
+
+@app.get("/staff/treatment-plans")
+def listTreatmentPlans(current_user = Depends(get_current_staff)):
+    return get_all_treatment_plans()
+
+@app.get("/staff/treatment-plans/{plan_id}")
+def getTreatmentPlan(plan_id: str, current_user = Depends(get_current_staff)):
+    return get_treatment_plan(plan_id)
+
+@app.post("/staff/treatment-plans/{plan_id}/sessions/{session_number}/complete")
+def completeTreatmentSession(plan_id: str, session_number: int, current_user = Depends(get_current_staff)):
+    return mark_session_complete(plan_id, session_number)
+
+@app.post("/staff/treatment-plans/{plan_id}/sessions/{session_number}/schedule")
+def scheduleTreatmentSession(plan_id: str, session_number: int, sessionData: ScheduleSession, current_user = Depends(get_current_staff)):
+    return schedule_session(plan_id, session_number, sessionData.appointment_date, sessionData.start_time)
+
+@app.get("/staff/patients")
+def listStaffPatients(current_user = Depends(get_current_staff)):
+    patients = supabase.table("patients").select("id, full_name, email, phone, created_at").execute().data
+    appointments = supabase.table("appointments").select("patient_id").execute().data
+    plans = supabase.table("treatment_plans").select("patient_id").eq("status", "in_progress").execute().data
+
+    appointment_counts = {}
+    for a in appointments:
+        appointment_counts[a["patient_id"]] = appointment_counts.get(a["patient_id"], 0) + 1
+
+    plan_counts = {}
+    for p in plans:
+        plan_counts[p["patient_id"]] = plan_counts.get(p["patient_id"], 0) + 1
+
+    return [
+        {
+            "id": p["id"],
+            "full_name": p["full_name"],
+            "email": p["email"],
+            "phone": p.get("phone"),
+            "created_at": p["created_at"],
+            "total_appointments": appointment_counts.get(p["id"], 0),
+            "active_treatment_plans": plan_counts.get(p["id"], 0),
+        }
+        for p in patients
+    ]

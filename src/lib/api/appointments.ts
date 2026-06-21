@@ -18,12 +18,26 @@ function delay(ms = 700) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+interface BackendService {
+  id: string;
+  name: string;
+  price: number;
+  duration_minutes: number;
+  is_multi_session: boolean;
+  session_count: number;
+}
+
 export async function getAppointmentTypesApi(): Promise<AppointmentType[]> {
   if (IS_MOCK) {
     await delay(400);
     return MOCK_APPOINTMENT_TYPES;
   }
-  return apiRequest<AppointmentType[]>("/appointments/types");
+  const services = await apiRequest<BackendService[]>("/services");
+  return services.map((s) => ({
+    id: s.id,
+    name: s.name,
+    duration_minutes: s.duration_minutes,
+  }));
 }
 
 export async function getAppointmentsApi(): Promise<Appointment[]> {
@@ -41,9 +55,14 @@ export async function createAppointmentApi(
     await delay(900);
     return addMockAppointment({ ...payload, patient_id: MOCK_PATIENT.id });
   }
-  return apiRequest<Appointment>("/appointments", {
+  return apiRequest<Appointment>("/book-appointment", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      patient_name: payload.full_name,
+      service_id: payload.appointment_type_id,
+      appointment_date: payload.appointment_date,
+      start_time: payload.appointment_time,
+    }),
   });
 }
 
@@ -53,7 +72,7 @@ export async function cancelAppointmentApi(id: string): Promise<void> {
     cancelMockAppointment(id);
     return;
   }
-  return apiRequest<void>(`/appointments/${id}/cancel`, { method: "POST" });
+  await apiRequest<Appointment>(`/cancel-appointment/${id}`, { method: "PATCH" });
 }
 
 export async function rescheduleAppointmentApi(

@@ -2,13 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, Mic2, Calendar, Sparkles } from "lucide-react";
-import { format } from "date-fns";
+import { Mic2 } from "lucide-react";
 
 import { getAppointmentsApi } from "@/lib/api/appointments";
 import { useAuth } from "@/lib/auth-context";
 import { AppointmentCard } from "@/components/appointments/appointment-card";
-import { Button } from "@/components/ui/button";
+import { ServicesPanel } from "@/components/dashboard/services-panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Appointment } from "@/lib/types";
 
@@ -21,31 +20,55 @@ function getGreeting() {
 
 function getUpcoming(appointments: Appointment[]) {
   return appointments
-    .filter((a) => !["completed", "cancelled"].includes(a.status))
+    .filter((a) => !["completed", "cancelled", "missed"].includes(a.status))
     .sort(
       (a, b) =>
         new Date(`${a.appointment_date}T${a.appointment_time}`).getTime() -
         new Date(`${b.appointment_date}T${b.appointment_time}`).getTime()
+    );
+}
+
+function getRecent(appointments: Appointment[]) {
+  return appointments
+    .filter((a) => a.status === "completed")
+    .sort(
+      (a, b) =>
+        new Date(`${b.appointment_date}T${b.appointment_time}`).getTime() -
+        new Date(`${a.appointment_date}T${a.appointment_time}`).getTime()
     )
     .slice(0, 3);
 }
 
+function VoiceButton({ className = "" }: { className?: string }) {
+  const router = useRouter();
+  return (
+    <button
+      onClick={() => router.push("/book?method=voice")}
+      className={`inline-flex items-center gap-2 px-7 py-3.5 rounded-[10px] border-[1.5px] border-primary/40 text-primary text-[15px] hover:bg-primary-subtle transition-colors ${className}`}
+    >
+      <Mic2 className="h-4 w-4" />
+      Book by voice
+    </button>
+  );
+}
+
 function DashboardSkeleton() {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-4 w-40" />
+    <div className="flex gap-10 items-start">
+      <div className="flex flex-col gap-8 flex-1 min-w-0 max-w-2xl">
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-11 w-64" />
+        </div>
+        <Skeleton className="h-32 rounded-[10px]" />
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-20 rounded-[10px]" />
+        </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Skeleton className="h-32 rounded-xl" />
-        <Skeleton className="h-32 rounded-xl" />
-      </div>
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-5 w-36" />
-        <Skeleton className="h-28 rounded-lg" />
-        <Skeleton className="h-28 rounded-lg" />
-      </div>
+      <aside className="w-[420px] shrink-0 hidden lg:block">
+        <Skeleton className="h-96 rounded-[10px]" />
+      </aside>
     </div>
   );
 }
@@ -62,97 +85,102 @@ export default function DashboardPage() {
   if (isLoading) return <DashboardSkeleton />;
 
   const upcoming = getUpcoming(appointments ?? []);
+  const recent = getRecent(appointments ?? []);
   const firstName = patient?.full_name.split(" ")[0] ?? "there";
-  const today = format(new Date(), "EEEE, MMMM d");
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex gap-10 items-start">
+      <div className="flex flex-col gap-9 flex-1 min-w-0 max-w-2xl">
       {/* Greeting */}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" aria-hidden />
-          <p className="text-sm text-muted-foreground font-medium">{today}</p>
-        </div>
-        <h1 className="text-3xl font-semibold text-foreground">
-          {getGreeting()}, {firstName}
+      <div>
+        <p className="text-[13px] text-muted-foreground mb-0.5">{getGreeting()},</p>
+        <h1 className="font-serif text-[42px] font-medium text-foreground tracking-tight leading-[1.04]">
+          {firstName}.
         </h1>
-        <p className="text-muted-foreground mt-0.5">
-          {upcoming.length > 0
-            ? `You have ${upcoming.length} upcoming appointment${upcoming.length > 1 ? "s" : ""}.`
-            : "No upcoming appointments. Ready to book one?"}
-        </p>
       </div>
 
-      {/* Primary actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <button
-          onClick={() => router.push("/book?method=manual")}
-          className="group flex flex-col items-start gap-3 rounded-xl bg-primary p-6 text-left shadow-md hover:bg-primary-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-foreground/15">
-            <CalendarPlus className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <div>
-            <p className="text-base font-semibold text-primary-foreground">Book Manually</p>
-            <p className="text-sm text-primary-foreground/75 mt-0.5 leading-snug">
-              Fill in a quick form to schedule your visit
-            </p>
-          </div>
-        </button>
-
-        <button
-          onClick={() => router.push("/book?method=voice")}
-          className="group flex flex-col items-start gap-3 rounded-xl bg-surface border border-border p-6 text-left shadow-sm hover:shadow-md hover:border-primary/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-subtle">
-            <Mic2 className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <p className="text-base font-semibold text-foreground">Book by Voice</p>
-            <p className="text-sm text-muted-foreground mt-0.5 leading-snug">
-              Speak naturally — our AI books it for you
-            </p>
-          </div>
-        </button>
-      </div>
-
-      {/* Upcoming appointments */}
-      <section aria-labelledby="upcoming-heading">
-        <div className="flex items-center justify-between mb-4">
-          <h2 id="upcoming-heading" className="text-lg font-semibold text-foreground">
-            Upcoming appointments
-          </h2>
-          {upcoming.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push("/appointments")}
-              className="text-primary hover:text-primary"
-            >
-              View all
-            </Button>
-          )}
-        </div>
-
-        {upcoming.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 py-14 px-6 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-subtle mb-4">
-              <Calendar className="h-6 w-6 text-primary" />
+      {upcoming.length > 0 ? (
+        <>
+          {/* Upcoming */}
+          <section>
+            <h2 className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70 mb-3">
+              Upcoming {upcoming.length > 1 ? `(${upcoming.length})` : ""}
+            </h2>
+            <div className="flex flex-col gap-3">
+              {upcoming.map((appt) => (
+                <AppointmentCard
+                  key={appt.id}
+                  appointment={appt}
+                  onReschedule={() => router.push("/appointments")}
+                />
+              ))}
             </div>
-            <p className="text-base font-medium text-foreground">No upcoming appointments</p>
-            <p className="text-sm text-muted-foreground mt-1 mb-5">
-              Book your first appointment to get started
-            </p>
-            <Button onClick={() => router.push("/book")}>Book an appointment</Button>
+          </section>
+
+          {/* Recent visits */}
+          {recent.length > 0 && (
+            <section>
+              <h2 className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70 mb-3">
+                Recent visits
+              </h2>
+              <div className="bg-card rounded-[10px] border border-border shadow-sm divide-y divide-border px-6">
+                {recent.map((appt) => (
+                  <AppointmentCard key={appt.id} appointment={appt} compact />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => router.push("/book?method=manual")}
+              className="px-7 py-3.5 rounded-[10px] bg-primary text-primary-foreground text-[15px] font-medium hover:bg-primary-hover transition-colors"
+            >
+              Book manually
+            </button>
+            <VoiceButton />
           </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {upcoming.map((appt) => (
-              <AppointmentCard key={appt.id} appointment={appt} compact />
-            ))}
+        </>
+      ) : (
+        /* Empty state */
+        <div className="flex flex-1 flex-col items-center justify-center py-16">
+          <div className="w-80 h-[100px] border-[1.5px] border-dashed rounded-[10px] mb-7 relative flex items-center justify-center border-foreground/15">
+            <div className="absolute left-[18px] top-[14px] bottom-[14px] w-8 border-r border-foreground/10 flex flex-col items-center justify-center gap-1.5">
+              <div className="w-3 h-[3px] bg-foreground/10 rounded-sm" />
+              <div className="w-[18px] h-[18px] bg-foreground/[0.07] rounded-sm" />
+              <div className="w-3 h-[3px] bg-foreground/10 rounded-sm" />
+            </div>
+            <div className="ml-6 opacity-[0.16]">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <line x1="12" y1="4" x2="12" y2="20" stroke="#16302B" strokeWidth="1.5" strokeLinecap="round" />
+                <line x1="4" y1="12" x2="20" y2="12" stroke="#16302B" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
           </div>
-        )}
-      </section>
+
+          <p className="font-serif text-2xl text-foreground/60 text-center tracking-tight mb-2 leading-tight">
+            No upcoming visits.
+          </p>
+          <p className="text-sm text-muted-foreground text-center mb-8">Ready when you are.</p>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => router.push("/book")}
+              className="px-7 py-3.5 rounded-[10px] bg-accent text-accent-foreground text-[15px] font-medium hover:opacity-90 transition-opacity"
+            >
+              Book your first appointment
+            </button>
+            <VoiceButton />
+          </div>
+        </div>
+      )}
+      </div>
+
+      {/* Services & pricing */}
+      <aside className="w-[420px] shrink-0 hidden lg:block sticky top-20">
+        <ServicesPanel />
+      </aside>
     </div>
   );
 }

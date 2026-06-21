@@ -6,7 +6,7 @@ import { z } from "zod";
 import { useState } from "react";
 import { format, isBefore, startOfDay } from "date-fns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarIcon, CheckCircle2, Clock } from "lucide-react";
+import { CalendarIcon, Clock } from "lucide-react";
 
 import { createAppointmentApi } from "@/lib/api/appointments";
 import { getAppointmentTypesApi } from "@/lib/api/appointments";
@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BookingTicket } from "@/components/appointments/booking-ticket";
 import { cn } from "@/lib/utils";
 import type { Appointment } from "@/lib/types";
 
@@ -86,7 +87,12 @@ export function BookingForm({ onSuccess }: BookingFormProps) {
   });
 
   if (confirmedAppointment) {
-    return <ConfirmationScreen appointment={confirmedAppointment} onBookAnother={() => { setConfirmedAppointment(null); reset({ full_name: patient?.full_name ?? "" }); }} />;
+    return (
+      <BookingTicket
+        appointment={confirmedAppointment}
+        onBookAnother={() => { setConfirmedAppointment(null); reset({ full_name: patient?.full_name ?? "" }); }}
+      />
+    );
   }
 
   return (
@@ -234,73 +240,5 @@ export function BookingForm({ onSuccess }: BookingFormProps) {
         Confirm appointment
       </Button>
     </form>
-  );
-}
-
-function ConfirmationScreen({
-  appointment,
-  onBookAnother,
-}: {
-  appointment: Appointment;
-  onBookAnother: () => void;
-}) {
-  let dateLabel = appointment.appointment_date;
-  try {
-    const d = new Date(`${appointment.appointment_date}T${appointment.appointment_time}`);
-    dateLabel = format(d, "EEEE, MMMM d, yyyy");
-  } catch {
-    // keep raw
-  }
-
-  const [h, m] = appointment.appointment_time.split(":").map(Number);
-  const p = h >= 12 ? "PM" : "AM";
-  const timeLabel = `${h % 12 || 12}:${String(m).padStart(2, "0")} ${p}`;
-
-  return (
-    <div className="flex flex-col items-center gap-6 py-6 text-center animate-in fade-in zoom-in-95 duration-300">
-      {/* Success icon */}
-      <div className="relative">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success-subtle">
-          <CheckCircle2 className="h-10 w-10 text-success" />
-        </div>
-        <div className="absolute -right-1 -top-1 h-6 w-6 rounded-full bg-primary-subtle flex items-center justify-center">
-          <span className="text-xs font-semibold text-primary">✓</span>
-        </div>
-      </div>
-
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">Appointment booked!</h2>
-        <p className="text-muted-foreground mt-1.5">
-          We&apos;ve confirmed your appointment. You&apos;ll receive a reminder by email.
-        </p>
-      </div>
-
-      {/* Details card */}
-      <div className="w-full max-w-sm rounded-xl bg-primary-subtle border border-primary/20 p-5 text-left flex flex-col gap-3">
-        <DetailRow label="Type" value={appointment.appointment_type?.name ?? "Appointment"} />
-        <DetailRow label="Date" value={dateLabel} />
-        <DetailRow label="Time" value={timeLabel} />
-        <DetailRow label="Patient" value={appointment.full_name} />
-        {appointment.doctor_name && <DetailRow label="Doctor" value={appointment.doctor_name} />}
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
-        <Button variant="outline" className="flex-1" onClick={onBookAnother}>
-          Book another
-        </Button>
-        <Button className="flex-1" asChild>
-          <a href="/appointments">View all appointments</a>
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
-      <span className="text-sm font-medium text-foreground text-right">{value}</span>
-    </div>
   );
 }
