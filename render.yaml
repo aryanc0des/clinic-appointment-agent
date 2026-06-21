@@ -19,3 +19,5 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
+      - key: VOICE_WEBHOOK_SECRET
+        sync: false

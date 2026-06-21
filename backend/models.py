@@ -38,3 +38,14 @@ class UpdateService(BaseModel):
 class UpdateProfile(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
+
+class VoiceCheckAvailability(BaseModel):
+    service: str
+    date: date
+    time: time
+
+class VoiceBookAppointment(BaseModel):
+    patient_name: str
+    service: str
+    date: date
+    time: time

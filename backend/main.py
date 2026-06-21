@@ -1,4 +1,5 @@
 import os
+import uuid
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from models import *
@@ -411,3 +412,78 @@ def listStaffPatients(current_user = Depends(get_current_staff)):
         }
         for p in patients
     ]
+
+@app.post("/api/voice/check-availability")
+def voiceCheckAvailability(payload: VoiceCheckAvailability, _voice_auth = Depends(verify_voice_secret)):
+    service = find_service_by_name(payload.service)
+
+    if not service:
+        return {"available": False, "reason": f"We don't offer a service called '{payload.service}'.", "alternatives": []}
+
+    if is_slot_available(service["id"], str(payload.time), str(payload.date)):
+        return {"available": True, "reason": None, "alternatives": []}
+
+    alternatives = find_alternative_slots(service["id"], payload.date, payload.time)
+    return {
+        "available": False,
+        "reason": "That time is already booked.",
+        "alternatives": alternatives,
+    }
+
+@app.post("/api/voice/book")
+def voiceBookAppointment(payload: VoiceBookAppointment, _voice_auth = Depends(verify_voice_secret)):
+    service = find_service_by_name(payload.service)
+
+    if not service:
+        raise HTTPException(status_code=400, detail=f"We don't offer a service called '{payload.service}'.")
+
+    if not is_slot_available(service["id"], str(payload.time), str(payload.date)):
+        raise HTTPException(status_code=409, detail="This time slot is already booked. Please choose a different time.")
+
+    try:
+        guest_email = f"voice-{uuid.uuid4()}@smilecare.voice"
+        guest_password_hash = hash_password(str(uuid.uuid4()))
+        patient_res = supabase.table("patients").insert({
+            "full_name": payload.patient_name,
+            "email": guest_email,
+            "hashed_password": guest_password_hash,
+        }).execute()
+        patient_id = patient_res.data[0]["id"]
+
+        end_time = calcEndTime(service["id"], payload.time)
+
+        appt_data = {
+            "patient_id": patient_id,
+            "patient_name": payload.patient_name,
+            "service_id": service["id"],
+            "appointment_date": str(payload.date),
+            "start_time": str(payload.time),
+            "end_time": str(end_time),
+            "status": "scheduled",
+            "booking_channel": "voice",
+        }
+
+        if service["is_multi_session"]:
+            plan = supabase.table("treatment_plans").insert({
+                "patient_id": patient_id,
+                "service_id": service["id"],
+                "total_sessions": service["session_count"],
+                "current_session": 1,
+                "status": "in_progress",
+            }).execute()
+            appt_data["treatment_plan_id"] = plan.data[0]["id"]
+            appt_data["session_number"] = 1
+
+        res = supabase.table("appointments").insert(appt_data).execute()
+        confirmation_id = res.data[0]["id"]
+
+        return {
+            "success": True,
+            "confirmation_id": confirmation_id,
+            "message": f"You're all set, {payload.patient_name}. Your {service['name']} appointment is confirmed for {payload.date} at {payload.time}.",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))

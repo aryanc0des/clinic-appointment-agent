@@ -8,6 +8,7 @@ from fastapi import Header, HTTPException
 load_dotenv()
 
 jwt_secret_key = os.getenv("JWT_SECRET")
+voice_webhook_secret = os.getenv("VOICE_WEBHOOK_SECRET")
 
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -52,3 +53,7 @@ def get_current_staff(authorization: str = Header(None)):
         raise HTTPException(status_code=403, detail="Staff access required")
 
     return user
+
+def verify_voice_secret(x_voice_secret: str = Header(None)):
+    if not voice_webhook_secret or x_voice_secret != voice_webhook_secret:
+        raise HTTPException(status_code=401, detail="Invalid webhook secret")

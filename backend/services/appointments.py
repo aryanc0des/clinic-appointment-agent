@@ -24,6 +24,35 @@ def is_slot_available(serviceID, startTime, date):
     else:
         return False
 
+def find_service_by_name(name):
+    services = supabase.table("services").select("*").execute().data
+    name_lower = name.strip().lower()
+
+    for s in services:
+        if s["name"].lower() == name_lower:
+            return s
+
+    for s in services:
+        if name_lower in s["name"].lower() or s["name"].lower() in name_lower:
+            return s
+
+    return None
+
+def find_alternative_slots(service_id, target_date, target_time, max_results=3):
+    duration = supabase.table("services").select("duration_minutes").eq("id", service_id).execute().data[0]["duration_minutes"]
+
+    alternatives = []
+    slot = datetime.combine(target_date, time(10, 0))
+    end_of_day = datetime.combine(target_date, time(21, 0))
+
+    while slot + timedelta(minutes=duration) <= end_of_day and len(alternatives) < max_results:
+        slot_time_str = slot.time().strftime("%H:%M:%S")
+        if slot.time() != target_time and is_slot_available(service_id, slot_time_str, str(target_date)):
+            alternatives.append(slot.time().strftime("%H:%M"))
+        slot += timedelta(minutes=30)
+
+    return alternatives
+
 def shape_staff_appointment(row, service_map):
     svc = service_map.get(row["service_id"], {})
     return {
