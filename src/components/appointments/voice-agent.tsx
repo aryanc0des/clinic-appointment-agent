@@ -2,6 +2,7 @@
 
 import { AlertCircle, Mic2, PhoneOff } from "lucide-react";
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
+import { useAuth } from "@/lib/auth-context";
 
 const AGENT_ID = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID;
 
@@ -32,11 +33,18 @@ export function VoiceAgent() {
 }
 
 function VoiceAgentSession() {
+  const { patient } = useAuth();
   const { status, message, isSpeaking, startSession, endSession } = useConversation();
 
   const connected = status === "connected";
   const connecting = status === "connecting";
   const hasError = status === "error";
+
+  function handleStart() {
+    startSession({
+      dynamicVariables: { patient_id: patient?.id ?? "" },
+    });
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -100,7 +108,7 @@ function VoiceAgentSession() {
           </button>
         ) : (
           <button
-            onClick={() => startSession()}
+            onClick={handleStart}
             disabled={connecting}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-[10px] bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
           >

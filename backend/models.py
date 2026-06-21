@@ -49,3 +49,4 @@ class VoiceBookAppointment(BaseModel):
     service: str
     date: date
     time: time
+    patient_id: Optional[str] = None

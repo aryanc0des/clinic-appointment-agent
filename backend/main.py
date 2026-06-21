@@ -441,14 +441,22 @@ def voiceBookAppointment(payload: VoiceBookAppointment, _voice_auth = Depends(ve
         raise HTTPException(status_code=409, detail="This time slot is already booked. Please choose a different time.")
 
     try:
-        guest_email = f"voice-{uuid.uuid4()}@smilecare.voice"
-        guest_password_hash = hash_password(str(uuid.uuid4()))
-        patient_res = supabase.table("patients").insert({
-            "full_name": payload.patient_name,
-            "email": guest_email,
-            "hashed_password": guest_password_hash,
-        }).execute()
-        patient_id = patient_res.data[0]["id"]
+        patient_id = None
+
+        if payload.patient_id:
+            existing = supabase.table("patients").select("id").eq("id", payload.patient_id).execute()
+            if existing.data:
+                patient_id = existing.data[0]["id"]
+
+        if not patient_id:
+            guest_email = f"voice-{uuid.uuid4()}@smilecare.voice"
+            guest_password_hash = hash_password(str(uuid.uuid4()))
+            patient_res = supabase.table("patients").insert({
+                "full_name": payload.patient_name,
+                "email": guest_email,
+                "hashed_password": guest_password_hash,
+            }).execute()
+            patient_id = patient_res.data[0]["id"]
 
         end_time = calcEndTime(service["id"], payload.time)
 
