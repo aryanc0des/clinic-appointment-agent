@@ -177,13 +177,18 @@ def bookAppointmentManual(appointment: BookAppointment, current_user = Depends(g
     serviceID = data["service_id"]
     startTime = data["start_time"]
     date = data["appointment_date"]
+
+    try:
+        serviceTable = supabase.table("services").select("*").eq("id", serviceID).execute()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid service_id")
+
+    if not serviceTable.data:
+        raise HTTPException(status_code=400, detail="Service not found")
+    service = serviceTable.data[0]
+
     if is_slot_available(serviceID, startTime, date):
         try:
-            serviceTable = supabase.table("services").select("*").eq("id", serviceID).execute()
-            if not serviceTable.data:
-                raise HTTPException(status_code=400, detail="Service not found")
-            service = serviceTable.data[0]
-
             endTime = calcEndTime(appointment.service_id, appointment.start_time)
             patientID = current_user["user_id"]
             data["end_time"] = str(endTime)
